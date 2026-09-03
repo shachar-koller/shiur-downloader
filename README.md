@@ -37,7 +37,7 @@ Create a new remote. A straightforward setup is:
 
 1. Name the remote `gdrive`.
 2. Choose **Google Drive** as the storage type.
-3. Leave the client ID and client secret blank unless you already maintain your own Google OAuth app.
+3. Enter your own Google OAuth client ID and client secret. Current rclone releases warn that the old shared Google Drive client is being retired during 2026; follow rclone's [Google Drive client ID instructions](https://rclone.org/drive/#making-your-own-client-id) for a durable scheduled setup. Leaving these fields blank may still work temporarily, but is no longer suitable for a new long-lived archive.
 4. Choose the access scope appropriate for the Drive account (full Drive access is the simplest for a dedicated archive account).
 5. Leave the service-account file blank.
 6. Complete the browser login and approve access.
