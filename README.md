@@ -92,8 +92,11 @@ Under **Secrets**, add:
 | Name | Value |
 | --- | --- |
 | `RCLONE_CONFIG_B64` | The single-line Base64 text from the previous step |
+| `NTFY_TOPIC` (optional) | A long, unguessable [ntfy](https://ntfy.sh/) topic name for phone push notifications |
 
 The remote name at the start of `GDRIVE_DESTINATION` must match the name inside your rclone configuration (`gdrive` in the example).
+
+If `NTFY_TOPIC` is configured, install the ntfy app on your phone and subscribe to that exact topic. Every workflow run sends a success or failure notification with the found, skipped, uploaded, and failed counts. Topic names on the public ntfy service are public to anyone who knows them, so use a long random value and keep it in a GitHub secret.
 
 ### 5. Run it once
 

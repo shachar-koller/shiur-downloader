@@ -52,4 +52,49 @@ jobs:
           echo "RCLONE_CONFIG=$config_path" >> "$GITHUB_ENV"
 
       - name: Archive new shiurim
-        run: python sync.py
+        id: archive
+        shell: bash
+        run: |
+          set +e
+          python sync.py 2>&1 | tee "$RUNNER_TEMP/sync.log"
+          sync_status=${PIPESTATUS[0]}
+          set -e
+
+          summary="$(grep -F 'INFO: Finished:' "$RUNNER_TEMP/sync.log" | tail -n 1 | sed 's/^INFO: Finished: //')"
+          if [[ -z "$summary" ]]; then
+            summary="The archive did not produce a summary. Open the run to see where it stopped."
+          fi
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+          printf '### YUTorah archive\n\n%s\n' "$summary" >> "$GITHUB_STEP_SUMMARY"
+          exit "$sync_status"
+
+      - name: Send push notification
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          JOB_STATUS: ${{ job.status }}
+          SYNC_SUMMARY: ${{ steps.archive.outputs.summary }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          if [[ -z "$NTFY_TOPIC" ]]; then
+            echo "NTFY_TOPIC is not configured; skipping push notification."
+            exit 0
+          fi
+
+          if [[ "$JOB_STATUS" == "success" ]]; then
+            title="YUTorah archive succeeded"
+            tags="white_check_mark"
+          else
+            title="YUTorah archive failed"
+            tags="warning"
+          fi
+          message="${SYNC_SUMMARY:-The workflow stopped before the archive produced a summary.}"
+
+          curl --fail --silent --show-error --retry 3 \
+            -H "Title: $title" \
+            -H "Tags: $tags" \
+            -H "Click: $RUN_URL" \
+            --data-binary "$message" \
+            "https://ntfy.sh/$NTFY_TOPIC"
