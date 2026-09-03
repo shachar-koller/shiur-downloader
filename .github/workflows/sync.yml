@@ -1,0 +1,55 @@
+name: Archive YUTorah shiurim
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yutorah-archive-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      YU_TORAH_TEACHER_ID: ${{ vars.YU_TORAH_TEACHER_ID }}
+      YU_TORAH_TEACHER_NAME: ${{ vars.YU_TORAH_TEACHER_NAME }}
+      GDRIVE_DESTINATION: ${{ vars.GDRIVE_DESTINATION }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip -r requirements.txt
+
+      - name: Install rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes rclone
+
+      - name: Run tests
+        run: python -m pytest
+
+      - name: Restore rclone configuration
+        env:
+          RCLONE_CONFIG_B64: ${{ secrets.RCLONE_CONFIG_B64 }}
+        run: |
+          config_path="$RUNNER_TEMP/rclone.conf"
+          printf '%s' "$RCLONE_CONFIG_B64" | base64 --decode > "$config_path"
+          chmod 600 "$config_path"
+          echo "RCLONE_CONFIG=$config_path" >> "$GITHUB_ENV"
+
+      - name: Archive new shiurim
+        run: python sync.py

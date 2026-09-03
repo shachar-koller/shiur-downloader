@@ -1,0 +1,4 @@
+feedparser==6.0.14
+requests==2.34.2
+torah-dl==0.6.3
+pytest==9.1.1
