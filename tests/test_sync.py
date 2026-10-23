@@ -89,7 +89,7 @@ def test_list_remote_filenames_uses_rclone_lsf(monkeypatch):
 
     monkeypatch.setattr(sync.subprocess, "run", fake_run)
     assert sync.list_remote_filenames("gdrive:Archive") == ["123 - One.mp3", "שלום.mp3"]
-    assert calls[0][0] == ["rclone", "lsf", "gdrive:Archive", "--files-only"]
+    assert calls[0][0] == ["rclone", "lsf", "gdrive:Archive", "--files-only", "--recursive"]
     assert calls[0][1]["check"] is True
 
 
