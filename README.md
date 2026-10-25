@@ -1,6 +1,6 @@
 # YUTorah → Google Drive archiver
 
-This small project checks one YUTorah teacher's current audio RSS feed each day and copies shiurim that are not already in a Google Drive folder. Google Drive itself is the persistent state: a shiur is considered archived when the folder contains a filename beginning with `<shiur_id> -`.
+This small project checks one YUTorah teacher's current audio RSS feed each day and copies shiurim that are not already in a Google Drive folder. New uploads go into `Iyun/` or `Other/` beneath that folder. Google Drive itself is the persistent state: a shiur is considered archived when the destination or any subfolder contains a filename beginning with `<shiur_id> -`.
 
 Files are named `<shiur_id> - <title>.mp3`. Hebrew and other Unicode text is preserved; only characters that are unsafe in filenames are replaced. The feed's MP3 enclosure is preferred, with [`torah-dl`](https://github.com/SoferAi/torah-dl) as a fallback.
 
@@ -107,14 +107,50 @@ After that, GitHub Actions runs automatically every day at approximately 06:17 U
 ## How each run behaves
 
 1. Fetch and parse every item currently exposed by the teacher's audio RSS feed.
-2. List the destination with `rclone lsf`.
+2. List the destination and all subfolders with `rclone lsf --files-only --recursive`.
 3. Skip any shiur whose ID already begins a filename in Drive.
 4. Download each missing MP3 into the runner's temporary directory.
-5. Upload it with `rclone copyto` and delete the temporary local copy.
+5. Choose `Iyun` or `Other` using the teacher's rules in `categories.json`, log that category, upload with `rclone copyto`, and delete the temporary local copy.
 
 One broken item does not stop later items from being attempted. If any item fails, the workflow is marked failed after all other items have been processed; because no Drive filename was created for the failed shiur, the next daily run retries it.
 
 No audio or state is committed to Git. The RSS feed only exposes a current window of items, so a new fork archives the items presently in that feed and then keeps up with new additions; it does not discover a teacher's entire historical catalog.
+
+## Category routing
+
+Edit `categories.json` to configure recognized Iyun series for each teacher. Rabbi Elchanan Adler (`80002`) starts with `Shabbos`: only numbered titles beginning with `Shabbos #20`, for example, match. A title merely mentioning Shabbos is not enough. Unrecognized titles, Parsha, and Machshava go to `Other`. Teachers without rules also default to `Other`.
+
+Per-shiur overrides take precedence over series matching. For example (IDs below are illustrative):
+
+```json
+{
+  "80002": {
+    "iyun_series": ["Shabbos"],
+    "overrides": {"1234567": "Iyun", "1234568": "Other"}
+  }
+}
+```
+
+Rules are validated before any downloads or uploads; invalid categories or misspelled settings fail the run. Filenames and shiur IDs remain unchanged. The current RSS does not provide reliable series/category metadata, so this initial classifier uses explicit title patterns and ID overrides. Zman assignment is separate.
+
+### Preview organization of existing files
+
+The daily sync leaves existing files where they are. Generate a separate read-only move proposal using the complete archive listing (including shiurim no longer present in RSS):
+
+```shell
+python organize.py --teacher-id 80002 --destination "gdrive:YUTorah/Rabbi Adler" > organization-plan.json
+```
+
+Or preview a previously saved inventory without connecting to Drive:
+
+```shell
+rclone lsf "gdrive:YUTorah/Rabbi Adler" --files-only --recursive > inventory.txt
+python organize.py --teacher-id 80002 --inventory inventory.txt > organization-plan.json
+```
+
+The JSON report contains proposed `moves`, `skipped` files, and `conflicts`. Duplicate shiur IDs require manual review and cause a nonzero exit code. Only the flat archive and the two category folders are considered; unrelated folders and unrecognized filenames are left alone. Existing filenames are preserved, including underscores introduced when unsafe punctuation was removed.
+
+This command has no apply mode. Review the proposed moves and adjust overrides first. Any later migration should use Drive moves, preserving the original file IDs and sharing links, rather than downloading and re-uploading. Do not run a migration concurrently with the daily archive job.
 
 ## Local development
 

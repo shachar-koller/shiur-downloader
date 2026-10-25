@@ -18,6 +18,8 @@ import feedparser
 import requests
 from torah_dl import extract as torah_dl_extract
 
+from categories import Routing, load_routing
+
 
 RSS_URL = "https://www.yutorah.org/rss/RssAudioOnly/teacher/{teacher_id}"
 REQUEST_TIMEOUT = (15, 120)
@@ -139,7 +141,7 @@ def archive_filename(shiur: Shiur) -> str:
 
 def list_remote_filenames(destination: str) -> list[str]:
     completed = subprocess.run(
-        ["rclone", "lsf", destination, "--files-only"],
+        ["rclone", "lsf", destination, "--files-only", "--recursive"],
         check=True,
         capture_output=True,
         text=True,
@@ -216,7 +218,9 @@ def fetch_feed(session: requests.Session, teacher_id: str) -> list[Shiur]:
     return parse_feed(response.content)
 
 
-def sync_teacher(teacher_id: str, teacher_name: str, destination: str) -> SyncResult:
+def sync_teacher(teacher_id: str, teacher_name: str, destination: str, routing: Routing | None = None) -> SyncResult:
+    if routing is None:
+        routing = load_routing(teacher_id)
     session = requests.Session()
     shiurim = fetch_feed(session, teacher_id)
     remote_filenames = list_remote_filenames(destination)
@@ -232,13 +236,14 @@ def sync_teacher(teacher_id: str, teacher_name: str, destination: str) -> SyncRe
                 continue
 
             filename = archive_filename(shiur)
+            category = routing.category(shiur.shiur_id, shiur.title)
             local_file = download_directory / filename
             try:
                 logging.info("Downloading: %s", filename)
                 download_shiur(session, shiur, local_file)
-                logging.info("Uploading: %s", filename)
-                upload_file(local_file, destination)
-                remote_filenames.append(filename)
+                logging.info("Uploading to %s: %s", category, filename)
+                upload_file(local_file, _remote_file(destination, category))
+                remote_filenames.append(f"{category}/{filename}")
                 uploaded += 1
             except Exception:
                 failed += 1
